@@ -20,6 +20,7 @@ logger = logging.getLogger("django.request")
 
 class ContextMixin:
     """
+    typing.Hashable -> object -> ContextMixin
     A default context mixin that passes the keyword arguments received by
     get_context_data() as the template context.
     """
@@ -39,6 +40,8 @@ class View:
     dispatch-by-method and simple sanity checking.
     """
 
+    # List of HTTP methods that the view can handle.
+    # https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods
     http_method_names = [
         "get",
         "post",
@@ -62,14 +65,27 @@ class View:
 
     @classproperty
     def view_is_async(cls):
+        """
+        Checks if the HTTP handlers (methods like get, post, etc.) are all async or all sync.
+        """
+        # Gather all the handlers (HTTP handler methods) that the class defines
+        # (like get, post, etc. but exclude options).
+        # Same as:
+        # handlers = []
+        # for method in cls.http_method_names:
+        #    if method != "options" and hasattr(cls, method):
+        #        handlers.append(getattr(cls, method))
         handlers = [
             getattr(cls, method)
             for method in cls.http_method_names
+            # Exclude the options method as it is not required to be defined (already implemented by default).
             if (method != "options" and hasattr(cls, method))
         ]
         if not handlers:
             return False
+        # Check if the first handler is async or not.
         is_async = iscoroutinefunction(handlers[0])
+        # Check if all the handlers are async or not.
         if not all(iscoroutinefunction(h) == is_async for h in handlers[1:]):
             raise ImproperlyConfigured(
                 f"{cls.__qualname__} HTTP handlers must either be all sync or all "
