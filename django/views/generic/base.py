@@ -28,6 +28,9 @@ class ContextMixin:
     extra_context = None
 
     def get_context_data(self, **kwargs):
+        """
+        Return the context for this view. Will always add at least the `view` attribute to the context data.
+        """
         kwargs.setdefault("view", self)
         if self.extra_context is not None:
             kwargs.update(self.extra_context)
@@ -95,22 +98,38 @@ class View:
 
     @classonlymethod
     def as_view(cls, **initkwargs):
-        """Main entry point for a request-response process."""
+        """
+        Main entry point for a request-response process.
+        Used to create an instance of the class and call the dispatch method.
+        """
         for key in initkwargs:
             if key in cls.http_method_names:
+                # It first checks if the key is in the list of HTTP methods (like get, post, etc.).
+                # If it is, it raises an error,
+                # to prevent the user from passing a method name as a keyword argument.
                 raise TypeError(
                     "The method name %s is not accepted as a keyword argument "
                     "to %s()." % (key, cls.__name__)
                 )
             if not hasattr(cls, key):
+                # It then checks if the key is an attribute of the class.
+                # If it is not, it raises an error,
+                # Here, the as_view method provides a way to override the attributes of the class,
+                # only if they are already defined.
                 raise TypeError(
                     "%s() received an invalid keyword %r. as_view "
                     "only accepts arguments that are already "
                     "attributes of the class." % (cls.__name__, key)
                 )
 
+        # When the as_view method is called, it returns the view function.
+        # When a request comes in that matches the URL pattern, Django calls the view function and
+        # passes the HttpRequest object as the first argument, which is request in this case.
         def view(request, *args, **kwargs):
             self = cls(**initkwargs)
+            # The setup method is called to initialize attributes shared by all view methods.
+            # The request object, positional arguments, and keyword arguments are passed to the setup method.
+            # The setup method can be overridden to provide custom initialization.
             self.setup(request, *args, **kwargs)
             if not hasattr(self, "request"):
                 raise AttributeError(
@@ -119,7 +138,10 @@ class View:
                 )
             return self.dispatch(request, *args, **kwargs)
 
+        # The class that defines the view is stored in the view_class attribute of the view function.
         view.view_class = cls
+        # The keyword arguments passed to the as_view method are
+        # stored in the view_initkwargs attribute of the view function.
         view.view_initkwargs = initkwargs
 
         # __name__ and __qualname__ are intentionally left unchanged as
@@ -138,8 +160,14 @@ class View:
 
         return view
 
+    # The setup() method in Django views is called before the dispatch() method.
+    # It is seperated from the __init__ method to allow for easier overriding.
     def setup(self, request, *args, **kwargs):
         """Initialize attributes shared by all view methods."""
+        # Checks if the view has a get method and not a head method. In that case,
+        # it sets the head method to be the same as the get method.
+        # This is because, by default, the HTTP HEAD method should behave just like the GET method,
+        # but without a body in the response.
         if hasattr(self, "get") and not hasattr(self, "head"):
             self.head = self.get
         self.request = request
@@ -165,7 +193,7 @@ class View:
             request.path,
             extra={"status_code": 405, "request": request},
         )
-        response = HttpResponseNotAllowed(self._allowed_methods())
+        response = HttpResponseNotAllowed(permitted_methods=self._allowed_methods())
 
         if self.view_is_async:
 
